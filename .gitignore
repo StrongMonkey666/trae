@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# 数据与日志（运行时生成）
+data/sqlite/*
+data/hdf5/*
+logs/*
+!data/sqlite/.gitkeep
+!data/hdf5/.gitkeep
+!logs/.gitkeep
+
+# 环境
+.env
+.venv
+venv/

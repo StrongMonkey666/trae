@@ -1,0 +1,11 @@
+pandas>=2.2
+numpy>=2.0
+h5py>=3.10
+tables>=3.9
+pyyaml>=6.0
+requests>=2.32
+apscheduler>=3.10
+
+# 数据源（按需启用）
+akshare>=1.16
+tushare>=1.4
