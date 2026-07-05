@@ -47,7 +47,52 @@ def client(app):
 def test_dashboard_loads(client):
     r = client.get("/")
     assert r.status_code == 200
-    assert "仪表盘" in r.data.decode("utf-8")
+    text = r.data.decode("utf-8")
+    assert "仪表盘" in text
+    assert "市场概览" in text
+    assert "涨幅榜" in text
+
+
+def test_fetch_market_snapshot_empty_data():
+    """_fetch_market_snapshot 在空数据时不应崩溃。"""
+    from quant_platform.web.routes.dashboard import _fetch_market_snapshot
+
+    class _FakeSvc:
+        def get_realtime_data(self):
+            return None
+
+    rows, stats = _fetch_market_snapshot(_FakeSvc(), top_n=20)
+    assert rows == []
+    assert stats["up_count"] == 0
+
+
+def test_fetch_market_snapshot_with_data():
+    """_fetch_market_snapshot 正确排序和统计。"""
+    import pandas as pd
+    from quant_platform.web.routes.dashboard import _fetch_market_snapshot
+
+    class _FakeSvc:
+        def get_realtime_data(self):
+            return pd.DataFrame({
+                "code": ["600000", "600001", "600002", "600003"],
+                "name": ["A", "B", "C", "D"],
+                "last": [10.0, 11.0, 9.0, 10.0],
+                "pre_close": [10.0, 10.0, 10.0, 10.0],
+                "turnover_rate": [1.0, 2.0, 0.5, 1.5],
+                "amount": [1000000, 2000000, 500000, 1500000],
+                "market_cap": [1e10, 2e10, 5e9, 1.5e10],
+                "pe_ttm": [10.0, 20.0, 5.0, 15.0],
+                "pb": [1.0, 2.0, 0.5, 1.5],
+            })
+
+    rows, stats = _fetch_market_snapshot(_FakeSvc(), top_n=3)
+    assert stats["up_count"] == 1   # 600001 +10%
+    assert stats["down_count"] == 1 # 600002 -10%
+    assert stats["flat_count"] == 2 # 600000, 600003 0%
+    assert len(rows) == 3
+    # 第一名应该是 600001（涨 10%）
+    assert rows[0]["code"] == "600001"
+    assert abs(rows[0]["change_pct"] - 10.0) < 0.01
 
 
 def test_backtests_list_empty(client):
