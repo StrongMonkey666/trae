@@ -22,11 +22,14 @@ class Condition:
     operator: str
     value: float
     value2: Optional[float] = None  # 仅 between
+    compare_field: Optional[str] = None  # 跨字段比较：field OP row[compare_field]
 
     def to_dict(self) -> Dict[str, Any]:
-        d = {"field": self.field, "operator": self.operator, "value": self.value}
+        d: Dict[str, Any] = {"field": self.field, "operator": self.operator, "value": self.value}
         if self.operator == "between":
             d["value2"] = self.value2
+        if self.compare_field is not None:
+            d["compare_field"] = self.compare_field
         return d
 
     @classmethod
@@ -36,10 +39,17 @@ class Condition:
         op = d["operator"]
         if op not in VALID_OPERATORS:
             raise QuantPlatformError(f"非法运算符: {op}")
-        try:
-            value = float(d["value"])
-        except (TypeError, ValueError) as e:
-            raise QuantPlatformError(f"value 必须为数值: {e}") from e
+        raw_value = d["value"]
+        compare_field: Optional[str] = None
+        # 跨字段简写：value 是字符串 → 视为 compare_field
+        if isinstance(raw_value, str):
+            compare_field = raw_value
+            value = 0.0
+        else:
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError) as e:
+                raise QuantPlatformError(f"value 必须为数值或字段名: {e}") from e
         value2 = None
         if op == "between":
             if "value2" not in d:
@@ -48,7 +58,14 @@ class Condition:
                 value2 = float(d["value2"])
             except (TypeError, ValueError) as e:
                 raise QuantPlatformError(f"value2 必须为数值: {e}") from e
-        return cls(field=d["field"], operator=op, value=value, value2=value2)
+        if compare_field is None:
+            compare_field = d.get("compare_field")
+        if compare_field is not None and op == "between":
+            raise QuantPlatformError("between 不支持跨字段比较")
+        return cls(
+            field=d["field"], operator=op, value=value,
+            value2=value2, compare_field=compare_field,
+        )
 
     def matches(self, row_value: Any) -> bool:
         if row_value is None or row_value != row_value:  # NaN
@@ -124,3 +141,61 @@ class SelectorSpec:
 
     def is_empty(self) -> bool:
         return not self.conditions and not self.sort_by and not self.limit
+
+    def with_relaxed_condition(self, idx: int, new_value: float) -> "SelectorSpec":
+        """返回一个新 spec，把第 idx 个条件的 value 改为 new_value。"""
+        if idx < 0 or idx >= len(self.conditions):
+            raise QuantPlatformError(f"条件索引越界: {idx}")
+        new_conds = []
+        for i, c in enumerate(self.conditions):
+            if i == idx:
+                new_conds.append(Condition(
+                    field=c.field, operator=c.operator,
+                    value=new_value, value2=c.value2,
+                ))
+            else:
+                new_conds.append(c)
+        return SelectorSpec(
+            conditions=new_conds, logic=self.logic,
+            sort_by=self.sort_by, sort_order=self.sort_order,
+            limit=self.limit,
+        )
+
+    def without_condition(self, idx: int) -> "SelectorSpec":
+        """返回一个新 spec，去掉第 idx 个条件。"""
+        if idx < 0 or idx >= len(self.conditions):
+            raise QuantPlatformError(f"条件索引越界: {idx}")
+        return SelectorSpec(
+            conditions=[c for i, c in enumerate(self.conditions) if i != idx],
+            logic=self.logic, sort_by=self.sort_by, sort_order=self.sort_order,
+            limit=self.limit,
+        )
+
+
+@dataclass
+class RelaxSuggestion:
+    """单个放宽建议。
+
+    - kind='drop'       建议去掉该条件
+    - kind='loosen'     建议调整阈值为 new_value
+    """
+    kind: str                # 'drop' or 'loosen'
+    condition_idx: int        # 在 spec.conditions 中的索引（-1 表示 drop 整条）
+    field: str               # 字段名
+    operator: str            # 运算符
+    current_value: Optional[float] = None
+    new_value: Optional[float] = None
+    expected_count: int = 0  # 应用此建议后预计能选中的股票数
+    description: str = ""    # 给 UI 展示的中文描述
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "condition_idx": self.condition_idx,
+            "field": self.field,
+            "operator": self.operator,
+            "current_value": self.current_value,
+            "new_value": self.new_value,
+            "expected_count": self.expected_count,
+            "description": self.description,
+        }

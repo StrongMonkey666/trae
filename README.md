@@ -363,3 +363,52 @@ cfg = StrategyConfig(
 print(BacktestEngine().run(cfg).metrics.to_dict())
 "
 ```
+
+## 预置选股模板
+
+| Key | 名称 | 条件 | 排序 | 说明 |
+| --- | --- | --- | --- | --- |
+| `low_valuation` | 低估值策略 | `pe_ttm<20 AND pb<3 AND roe>10` | PE 升序 | 经典价值投资 |
+| `high_growth` | 高增长策略 | `revenue_growth>20 AND net_profit_growth>20 AND roe>15` | 净利润增速降序 | 业绩驱动 |
+| `ma_bull` | 均线多头排列 | `close > ma_20 AND ma_20 > ma_60`（**跨字段**） | 涨幅降序 | 趋势跟随 |
+| `volume_break` | 放量突破 | `turnover_rate>5 AND change_pct>3` | 涨幅降序 | 短线动量 |
+
+> 注意：`ma_bull` 需要特征表里有 `ma_20` / `ma_60` 字段。`SelectorService._do_build_features`
+> 会自动从历史 K 线计算 MA5/MA10/MA20/MA60，K 线缺失则留 NaN（视为不命中）。
+
+## 跨字段比较（Cross-Field）
+
+`Condition` 支持 `compare_field` 做"行内跨列"比较，用于表达均线多头、MACD 与零轴等
+技术条件。两种写法等价：
+
+```python
+# 写法 1：显式 compare_field
+Condition("close", ">", 0, compare_field="ma_20")
+
+# 写法 2：value 写字段名字符串（LLM 友好，自动转 compare_field）
+Condition.from_dict({"field": "close", "operator": ">", "value": "ma_20"})
+```
+
+LLM 输出 JSON 时直接用字符串 `value` 即可：
+
+```json
+{
+  "conditions": [
+    {"field": "close", "operator": ">", "value": "ma_20"},
+    {"field": "ma_20", "operator": ">", "value": "ma_60"}
+  ],
+  "logic": "AND"
+}
+```
+
+限制：跨字段不支持 `between`；任一侧为 NaN 视为不命中。
+
+## 选股结果为空时：放宽建议
+
+`SelectorEngine.suggest_relaxations(spec, features)` 在 `result.empty` 时给出最多 3 条建议：
+
+- **drop**：去掉单条条件，看其他条件能命中多少
+- **loosen**：放宽单条数值的阈值（10/25/50/100% 步长），看该条件单独能命中多少
+
+Web 路由 `/selector/api/run` 命中为空时自动返回 `suggestions` 字段并展示在 UI 上。
+

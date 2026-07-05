@@ -72,13 +72,23 @@ def parse_selector_json(text: str) -> Dict[str, Any]:
         else:
             if "value" not in c:
                 raise QuantPlatformError(f"conditions[{i}] 缺少 value")
-        try:
+        raw_value = c.get("value")
+        # 跨字段简写：value 是字符串字段名 → 视为 compare_field
+        if isinstance(raw_value, str):
+            if raw_value not in _ALLOWED_FIELDS:
+                raise QuantPlatformError(
+                    f"conditions[{i}].value='{raw_value}' 不是已知字段"
+                )
             if op == "between":
-                float(c["value"]); float(c["value2"])
-            else:
-                float(c["value"])
-        except (TypeError, ValueError) as e:
-            raise QuantPlatformError(f"conditions[{i}] value 不是数值: {e}")
+                raise QuantPlatformError("between 不支持跨字段比较")
+        else:
+            try:
+                if op == "between":
+                    float(c["value"]); float(c["value2"])
+                else:
+                    float(c["value"])
+            except (TypeError, ValueError) as e:
+                raise QuantPlatformError(f"conditions[{i}] value 不是数值: {e}")
 
     logic = data.get("logic", "AND")
     if logic not in _ALLOWED_LOGIC:

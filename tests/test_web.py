@@ -222,3 +222,80 @@ def test_selector_api_run_missing_param(app_with_data):
     c = app.test_client()
     r = c.post("/selector/api/run", json={})
     assert r.status_code == 400
+
+
+# ============================================================
+# 放宽建议：选股为空时 api 应返回 suggestions
+# ============================================================
+class TestSelectorSuggestions:
+    @pytest.fixture
+    def app_with_features(self, tmp_path: Path, monkeypatch):
+        """构造一个让选股必为空的 app（features 中放宽后可命中）。"""
+        sqlite = tmp_path / "q.db"
+        cfg = {
+            "project": {"name": "test"},
+            "data_service": {
+                "storage": {
+                    "sqlite_path": str(sqlite),
+                    "hdf5_path": str(tmp_path / "q.h5"),
+                },
+                "source_priority": ["fake"],
+                "realtime_source": "fake",
+            },
+            "data_sources": {"fake": {"enabled": True}},
+            "logging": {"level": "WARNING", "file": ""},
+        }
+        app = create_app(config=cfg)
+        # monkey-patch build_features 返回特定 features
+        def _fake_features(self, as_of=None):
+            return pd.DataFrame({
+                "code": [f"{600000 + i:06d}" for i in range(5)],
+                "name": [f"S{i}" for i in range(5)],
+                "close": [10.0] * 5,
+                "pe_ttm": [5.0, 10.0, 15.0, 20.0, 30.0],
+                "pb": [1.0, 2.0, 3.0, 4.0, 5.0],
+                "roe": [5.0, 10.0, 15.0, 20.0, 30.0],
+            })
+        monkeypatch.setattr(
+            "quant_platform.selector.service.SelectorService.build_features",
+            _fake_features,
+        )
+        return app
+
+    def test_api_returns_suggestions_when_empty(self, app_with_features):
+        c = app_with_features.test_client()
+        # pe<3 AND roe>100: 数据里 pe>=5, roe<=30, 都不命中
+        # 放宽: pe<3 -> pe<10 命中 2 (pe=5,10) / roe>100 -> roe<200 命中 0
+        r = c.post("/selector/api/run", json={
+            "json": {
+                "conditions": [
+                    {"field": "pe_ttm", "operator": "<", "value": 3},
+                    {"field": "roe", "operator": ">", "value": 100},
+                ],
+                "logic": "AND",
+            }
+        })
+        assert r.status_code == 200
+        d = r.get_json()
+        assert d["count"] == 0
+        assert "suggestions" in d
+        assert len(d["suggestions"]) >= 1
+        # 每条建议都有 description
+        for s in d["suggestions"]:
+            assert "description" in s
+            assert s["expected_count"] > 0
+
+    def test_api_no_suggestions_when_result_nonempty(self, app_with_features):
+        c = app_with_features.test_client()
+        # pe<200 会命中 5 只
+        r = c.post("/selector/api/run", json={
+            "json": {
+                "conditions": [{"field": "pe_ttm", "operator": "<", "value": 200}],
+                "logic": "AND",
+            }
+        })
+        assert r.status_code == 200
+        d = r.get_json()
+        assert d["count"] > 0
+        # 不附带 suggestions
+        assert d.get("suggestions", []) == []

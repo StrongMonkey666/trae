@@ -18,6 +18,7 @@
 <div class="panel">
   <h3>结果</h3>
   <div id="result-meta" class="muted">点击上方模板开始选股</div>
+  <div id="result-suggestions"></div>
   <div id="result-table"></div>
 </div>
 
@@ -25,6 +26,7 @@
 function runTemplate(key) {
   document.getElementById('result-meta').innerText = '正在查询...';
   document.getElementById('result-table').innerHTML = '';
+  document.getElementById('result-suggestions').innerHTML = '';
   fetch('{{ url_for("selector.api_run") }}', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -39,6 +41,7 @@ function runTemplate(key) {
       document.getElementById('result-meta').innerText =
         '命中 ' + d.count + ' 条 · 条件: ' + JSON.stringify(d.spec);
       if (d.rows.length === 0) {
+        renderSuggestions(d.suggestions);
         document.getElementById('result-table').innerHTML = '<p class="empty">无结果</p>';
         return;
       }
@@ -57,6 +60,24 @@ function runTemplate(key) {
     .catch(e => {
       document.getElementById('result-meta').innerText = '请求失败: ' + e;
     });
+}
+
+function renderSuggestions(suggestions) {
+  const el = document.getElementById('result-suggestions');
+  if (!suggestions || suggestions.length === 0) {
+    el.innerHTML = '';
+    return;
+  }
+  let html = '<div class="suggestions"><h4>💡 没命中？试试放宽条件</h4><ul>';
+  suggestions.forEach((s, i) => {
+    const badge = s.kind === 'drop' ? '🗑 去掉' : '↔ 放宽';
+    html += '<li><span class="badge">' + badge + '</span> '
+         + s.description
+         + ' <span class="muted">（预计命中 ' + s.expected_count + ' 只）</span>'
+         + '</li>';
+  });
+  html += '</ul><p class="muted small">回到「使用预置模板」选其他条件，或修改后重新执行。</p></div>';
+  el.innerHTML = html;
 }
 </script>
 {% endblock %}

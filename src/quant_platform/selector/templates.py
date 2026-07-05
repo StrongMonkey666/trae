@@ -33,9 +33,11 @@ TEMPLATE_HIGH_GROWTH = SelectorSpec(
 
 
 # 均线多头：收盘价 > MA20 > MA60
+# 用跨字段比较 (compare_field) 表达"close > ma_20"和"ma_20 > ma_60"。
 TEMPLATE_MA_BULL = SelectorSpec(
     conditions=[
-        Condition("close", ">", 0),  # 占位：实际需要动态比较
+        Condition("close", ">", 0, compare_field="ma_20"),
+        Condition("ma_20", ">", 0, compare_field="ma_60"),
     ],
     logic="AND",
     sort_by="change_pct",
