@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}选股{% endblock %}
+{% block content %}
+<h2>选股</h2>
+
+<div class="panel">
+  <h3>使用预置模板</h3>
+  <div class="template-grid">
+    {% for t in templates %}
+    <div class="template-card" data-key="{{ t.key }}" onclick="runTemplate('{{ t.key }}')">
+      <div class="t-name">{{ t.name }}</div>
+      <div class="t-desc">{{ t.description }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="panel">
+  <h3>结果</h3>
+  <div id="result-meta" class="muted">点击上方模板开始选股</div>
+  <div id="result-table"></div>
+</div>
+
+<script>
+function runTemplate(key) {
+  document.getElementById('result-meta').innerText = '正在查询...';
+  document.getElementById('result-table').innerHTML = '';
+  fetch('{{ url_for("selector.api_run") }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({template: key})
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) {
+        document.getElementById('result-meta').innerText = '错误: ' + d.error;
+        return;
+      }
+      document.getElementById('result-meta').innerText =
+        '命中 ' + d.count + ' 条 · 条件: ' + JSON.stringify(d.spec);
+      if (d.rows.length === 0) {
+        document.getElementById('result-table').innerHTML = '<p class="empty">无结果</p>';
+        return;
+      }
+      const cols = Object.keys(d.rows[0]);
+      let html = '<table class="data-table"><thead><tr>';
+      cols.forEach(c => html += '<th>' + c + '</th>');
+      html += '</tr></thead><tbody>';
+      d.rows.forEach(row => {
+        html += '<tr>';
+        cols.forEach(c => html += '<td>' + (row[c] ?? '') + '</td>');
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+      document.getElementById('result-table').innerHTML = html;
+    })
+    .catch(e => {
+      document.getElementById('result-meta').innerText = '请求失败: ' + e;
+    });
+}
+</script>
+{% endblock %}

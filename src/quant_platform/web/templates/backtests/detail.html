@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}回测 #{{ rec.id }}{% endblock %}
+{% block content %}
+<h2>回测 #{{ rec.id }} · {{ rec.name }}</h2>
+
+<div class="grid-stats">
+  <div class="stat-card">
+    <div class="stat-label">总收益</div>
+    <div class="stat-value {% if metrics.total_return >= 0 %}up{% else %}down{% endif %}">
+      {{ "%.2f"|format(metrics.total_return * 100) }}%
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">年化收益</div>
+    <div class="stat-value">{{ "%.2f"|format(metrics.annualized_return * 100) }}%</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">胜率</div>
+    <div class="stat-value">{{ "%.2f"|format(metrics.win_rate * 100) }}%</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">最大回撤</div>
+    <div class="stat-value down">{{ "%.2f"|format(metrics.max_drawdown * 100) }}%</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">夏普比率</div>
+    <div class="stat-value">{{ "%.2f"|format(metrics.sharpe_ratio) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">最终权益</div>
+    <div class="stat-value">{{ "%.2f"|format(metrics.final_equity) }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>权益曲线</h3>
+  <canvas id="equityChart" height="80"></canvas>
+</div>
+
+<div class="panel">
+  <h3>策略参数</h3>
+  <pre class="code-block">{{ config.to_json() }}</pre>
+</div>
+
+<div class="panel">
+  <h3>交易记录（{{ trades|length }} 笔）</h3>
+  {% if trades %}
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>代码</th><th>名称</th><th>买入日</th><th>买入价</th>
+        <th>卖出日</th><th>卖出价</th><th>收益率</th><th>盈亏</th><th>天数</th><th>原因</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in trades[:50] %}
+      <tr>
+        <td>{{ t.code }}</td>
+        <td>{{ t.name }}</td>
+        <td class="muted">{{ t.buy_date or "" }}</td>
+        <td>{{ "%.2f"|format(t.buy_price) }}</td>
+        <td class="muted">{{ t.sell_date or "" }}</td>
+        <td>{{ "%.2f"|format(t.sell_price) }}</td>
+        <td class="{% if t.profit_pct >= 0 %}up{% else %}down{% endif %}">
+          {{ "%.2f"|format(t.profit_pct * 100) }}%
+        </td>
+        <td class="{% if t.profit_amount >= 0 %}up{% else %}down{% endif %}">
+          {{ "%.2f"|format(t.profit_amount) }}
+        </td>
+        <td>{{ t.hold_days }}</td>
+        <td><span class="badge">{{ t.sell_reason }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty">无交易</p>
+  {% endif %}
+</div>
+
+<script>
+fetch('{{ url_for("backtests.equity_json", record_id=rec.id) }}')
+  .then(r => r.json())
+  .then(d => {
+    const ctx = document.getElementById('equityChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: d.dates,
+        datasets: [{
+          label: '权益',
+          data: d.values,
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37,99,235,0.1)',
+          tension: 0.2,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 10 } },
+          y: { ticks: { callback: v => v.toLocaleString() } }
+        }
+      }
+    });
+  });
+</script>
+{% endblock %}

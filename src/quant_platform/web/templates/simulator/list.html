@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}模拟实例{% endblock %}
+{% block content %}
+<h2>模拟持仓实例</h2>
+{% if instances %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th><th>名称</th><th>状态</th><th>初始资金</th>
+      <th>现金</th><th>持仓数</th><th>当前市值</th><th>盈亏</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for inst in instances %}
+    <tr>
+      <td><a href="{{ url_for('simulator.detail', instance_id=inst.id) }}">#{{ inst.id }}</a></td>
+      <td>{{ inst.name }}</td>
+      <td><span class="badge badge-{{ inst.status }}">{{ inst.status }}</span></td>
+      <td>{{ "%.2f"|format(inst.initial_capital) }}</td>
+      <td>{{ "%.2f"|format(inst.cash) }}</td>
+      <td>{{ inst.position_count }}</td>
+      <td>{{ "%.2f"|format(inst.total_value) }}</td>
+      <td class="{% if inst.pnl >= 0 %}up{% else %}down{% endif %}">
+        {{ "%.2f"|format(inst.pnl) }} ({{ "%.2f"|format(inst.pnl_pct) }}%)
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">暂无模拟实例。可在 <a href="{{ url_for('backtests.list_view') }}">回测管理</a> 中部署。</p>
+{% endif %}
+{% endblock %}

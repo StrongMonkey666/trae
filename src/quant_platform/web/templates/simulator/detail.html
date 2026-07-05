@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}实例 #{{ inst.id }}{% endblock %}
+{% block content %}
+<h2>实例 #{{ inst.id }} · {{ inst.name }}</h2>
+
+<div class="grid-stats">
+  <div class="stat-card">
+    <div class="stat-label">状态</div>
+    <div class="stat-value"><span class="badge badge-{{ inst.status }}">{{ inst.status }}</span></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">初始资金</div>
+    <div class="stat-value">{{ "%.2f"|format(inst.initial_capital) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">当前现金</div>
+    <div class="stat-value">{{ "%.2f"|format(cash) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">持仓数</div>
+    <div class="stat-value">{{ positions|length }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>权益走势</h3>
+  <canvas id="eqChart" height="80"></canvas>
+</div>
+
+<div class="grid-2">
+  <div class="panel">
+    <h3>当前持仓</h3>
+    {% if positions %}
+    <table class="data-table">
+      <thead>
+        <tr><th>代码</th><th>名称</th><th>股数</th><th>成本</th><th>止盈区</th></tr>
+      </thead>
+      <tbody>
+        {% for p in positions %}
+        <tr>
+          <td>{{ p.code }}</td>
+          <td>{{ p.name }}</td>
+          <td>{{ p.shares }}</td>
+          <td>{{ "%.2f"|format(p.avg_cost) }}</td>
+          <td>{{ "✓" if p.in_tp_zone else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">无持仓</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h3>最近成交</h3>
+    {% if trades %}
+    <table class="data-table">
+      <thead>
+        <tr><th>时间</th><th>标的</th><th>方向</th><th>价格</th><th>股数</th><th>原因</th></tr>
+      </thead>
+      <tbody>
+        {% for t in trades[:20] %}
+        <tr>
+          <td class="muted">{{ t.trade_date }}</td>
+          <td>{{ t.code }} {{ t.name }}</td>
+          <td><span class="badge badge-{{ t.side }}">{{ t.side }}</span></td>
+          <td>{{ "%.2f"|format(t.price) }}</td>
+          <td>{{ t.shares }}</td>
+          <td>{{ t.reason }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">无成交</p>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+fetch('{{ url_for("simulator.equity_json", instance_id=inst.id) }}')
+  .then(r => r.json())
+  .then(d => {
+    const ctx = document.getElementById('eqChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: d.dates,
+        datasets: [
+          { label: '总权益', data: d.values, borderColor: '#2563eb',
+            backgroundColor: 'rgba(37,99,235,0.1)', tension: 0.2, fill: true },
+          { label: '现金', data: d.cash, borderColor: '#10b981', tension: 0.2 },
+          { label: '持仓', data: d.position_value, borderColor: '#f59e0b', tension: 0.2 },
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { ticks: { callback: v => v.toLocaleString() } } }
+      }
+    });
+  });
+</script>
+{% endblock %}
