@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ cfg.project_name }}{% endblock %} · 量化平台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">📈 量化平台</div>
+    <nav>
+      <a href="{{ url_for('dashboard.index') }}" class="nav-link">仪表盘</a>
+      <a href="{{ url_for('backtests.list_view') }}" class="nav-link">回测管理</a>
+      <a href="{{ url_for('simulator.list_view') }}" class="nav-link">模拟持仓</a>
+      <a href="{{ url_for('selector.index') }}" class="nav-link">选股</a>
+    </nav>
+    <div class="footer">v2.0 · {{ cfg.project_name }}</div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      {% block breadcrumb %}{% endblock %}
+    </header>
+    <section class="content">
+      {% block content %}{% endblock %}
+    </section>
+  </main>
+</body>
+</html>

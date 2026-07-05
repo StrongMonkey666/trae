@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}回测管理{% endblock %}
+{% block content %}
+<h2>回测记录</h2>
+{% if rows %}
+<table class="data-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>名称</th>
+      <th>交易数</th>
+      <th>总收益</th>
+      <th>最大回撤</th>
+      <th>夏普</th>
+      <th>部署</th>
+      <th>创建时间</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td>#{{ r.id }}</td>
+      <td>{{ r.name }}</td>
+      <td>{{ r.trade_count }}</td>
+      <td class="{% if r.total_return_pct >= 0 %}up{% else %}down{% endif %}">
+        {{ "%.2f"|format(r.total_return_pct) }}%
+      </td>
+      <td class="down">{{ "%.2f"|format(r.max_dd_pct) }}%</td>
+      <td>{{ "%.2f"|format(r.sharpe) }}</td>
+      <td>{{ "✓" if r.deployed else "—" }}</td>
+      <td class="muted">{{ r.created_at or "" }}</td>
+      <td>
+        <a href="{{ url_for('backtests.detail', record_id=r.id) }}">查看</a>
+        {% if not r.deployed %}
+        | <a href="#" onclick="deploy({{ r.id }}); return false;">部署</a>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">暂无回测记录。可执行 <code>python scripts/run_backtest.py --template low_valuation ...</code> 创建。</p>
+{% endif %}
+
+<script>
+function deploy(id) {
+  if (!confirm('确定部署回测 #' + id + ' 为模拟实例？')) return;
+  fetch('/simulator/api/deploy/' + id, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      alert('已部署为实例 #' + d.instance_id);
+      location.reload();
+    })
+    .catch(e => alert('部署失败: ' + e));
+}
+</script>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}仪表盘{% endblock %}
+{% block content %}
+<div class="grid-stats">
+  <div class="stat-card">
+    <div class="stat-label">回测总数</div>
+    <div class="stat-value">{{ stats.backtest_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">模拟实例</div>
+    <div class="stat-value">{{ stats.instance_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">运行中</div>
+    <div class="stat-value">{{ stats.running_count }}</div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <div class="panel">
+    <h3>最近回测</h3>
+    {% if recent %}
+    <table class="data-table">
+      <thead>
+        <tr><th>ID</th><th>名称</th><th>收益</th><th>夏普</th><th>回撤</th><th>部署</th></tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td><a href="{{ url_for('backtests.detail', record_id=r.id) }}">#{{ r.id }}</a></td>
+          <td>{{ r.name }}</td>
+          <td class="{% if r.total_return >= 0 %}up{% else %}down{% endif %}">
+            {{ "%.2f"|format(r.total_return) }}%
+          </td>
+          <td>{{ "%.2f"|format(r.sharpe) }}</td>
+          <td class="down">{{ "%.2f"|format(r.max_dd) }}%</td>
+          <td>{{ "✓" if r.deployed else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无回测记录</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h3>模拟实例</h3>
+    {% if sim_summary %}
+    <table class="data-table">
+      <thead>
+        <tr><th>ID</th><th>名称</th><th>状态</th><th>市值</th><th>盈亏</th></tr>
+      </thead>
+      <tbody>
+        {% for s in sim_summary %}
+        <tr>
+          <td><a href="{{ url_for('simulator.detail', instance_id=s.id) }}">#{{ s.id }}</a></td>
+          <td>{{ s.name }}</td>
+          <td><span class="badge badge-{{ s.status }}">{{ s.status }}</span></td>
+          <td>{{ "%.2f"|format(s.total_value) }}</td>
+          <td class="{% if s.pnl >= 0 %}up{% else %}down{% endif %}">
+            {{ "%.2f"|format(s.pnl) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">暂无模拟实例</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
