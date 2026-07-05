@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}回测管理{% endblock %}
 {% block content %}
-<h2>回测记录</h2>
+<h2>回测记录
+  <a href="{{ url_for('backtests.new_view') }}" class="btn btn-primary btn-sm" style="vertical-align:middle;margin-left:8px">+ 新建回测</a>
+</h2>
 {% if rows %}
 <table class="data-table">
   <thead>
@@ -41,7 +43,7 @@
   </tbody>
 </table>
 {% else %}
-<p class="empty">暂无回测记录。可执行 <code>python scripts/run_backtest.py --template low_valuation ...</code> 创建。</p>
+<p class="empty">暂无回测记录。<a href="{{ url_for('backtests.new_view') }}">点击创建新回测</a></p>
 {% endif %}
 
 <script>

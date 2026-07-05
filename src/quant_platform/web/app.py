@@ -51,9 +51,10 @@ def create_app(config: Dict[str, Any] | None = None) -> Flask:
         }
 
     # 注册路由
-    from .routes import dashboard, backtests, simulator, selector
+    from .routes import dashboard, backtests, simulator, selector, settings
     app.register_blueprint(dashboard.bp)
     app.register_blueprint(backtests.bp)
     app.register_blueprint(simulator.bp)
     app.register_blueprint(selector.bp)
+    app.register_blueprint(settings.bp)
     return app

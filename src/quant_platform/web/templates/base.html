@@ -12,9 +12,12 @@
     <div class="brand">📈 量化平台</div>
     <nav>
       <a href="{{ url_for('dashboard.index') }}" class="nav-link">仪表盘</a>
+      <a href="{{ url_for('backtests.new_view') }}" class="nav-link">新建回测</a>
       <a href="{{ url_for('backtests.list_view') }}" class="nav-link">回测管理</a>
       <a href="{{ url_for('simulator.list_view') }}" class="nav-link">模拟持仓</a>
       <a href="{{ url_for('selector.index') }}" class="nav-link">选股</a>
+      <div class="nav-divider"></div>
+      <a href="{{ url_for('settings.index') }}" class="nav-link">⚙ 设置</a>
     </nav>
     <div class="footer">v2.0 · {{ cfg.project_name }}</div>
   </aside>

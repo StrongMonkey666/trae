@@ -299,3 +299,80 @@ class TestSelectorSuggestions:
         assert d["count"] > 0
         # 不附带 suggestions
         assert d.get("suggestions", []) == []
+
+
+# ============================================================
+# 设置页面
+# ============================================================
+class TestSettingsRoutes:
+    def test_settings_page_loads(self, client):
+        r = client.get("/settings/")
+        assert r.status_code == 200
+        assert "LLM" in r.text
+
+    def test_settings_api_get_returns_config(self, client):
+        r = client.get("/settings/api/get")
+        assert r.status_code == 200
+        d = r.get_json()
+        assert "llm" in d
+        assert "notify" in d
+        assert "data_sources" in d
+
+    def test_settings_api_save(self, client):
+        r = client.post("/settings/api/save", json={
+            "llm": {"model": "test-model", "timeout": 30},
+        })
+        assert r.status_code == 200
+        d = r.get_json()
+        assert d["ok"] is True
+
+    def test_settings_api_save_persists(self, client):
+        client.post("/settings/api/save", json={
+            "llm": {"model": "persist-test"},
+        })
+        r = client.get("/settings/api/get")
+        d = r.get_json()
+        assert d["llm"]["model"] == "persist-test"
+
+    def test_settings_api_get_sanitizes_secrets(self, client):
+        # 先写入一个有 api_key 的配置
+        client.post("/settings/api/save", json={
+            "llm": {"api_key": "sk-12345678"},
+            "notify": {"smtp_password": "my-secret-pw"},
+        })
+        r = client.get("/settings/api/get")
+        d = r.get_json()
+        # api_key 应该被部分掩盖
+        assert "****" in d["llm"]["api_key"]
+        assert d["llm"]["api_key"] != "sk-12345678"
+        assert "****" in d["notify"]["smtp_password"]
+
+    def test_settings_test_llm_no_key(self, client):
+        r = client.post("/settings/api/test-llm", json={"api_key": ""})
+        assert r.status_code == 400
+
+    def test_settings_test_smtp_incomplete(self, client):
+        r = client.post("/settings/api/test-smtp", json={"smtp_host": ""})
+        assert r.status_code == 400
+
+
+# ============================================================
+# 回测创建页面
+# ============================================================
+class TestBacktestNewRoutes:
+    def test_new_backtest_page_loads(self, client):
+        r = client.get("/backtests/new")
+        assert r.status_code == 200
+        assert "新建回测" in r.text
+
+    def test_create_backtest_missing_params(self, client):
+        r = client.post("/backtests/api/create", json={})
+        assert r.status_code == 400
+
+    def test_create_backtest_bad_date(self, client):
+        r = client.post("/backtests/api/create", json={
+            "template": "low_valuation",
+            "start_date": "bad-date",
+            "end_date": "2024-12-31",
+        })
+        assert r.status_code == 400

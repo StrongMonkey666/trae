@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+{% block title %}系统设置{% endblock %}
+{% block content %}
+<h2>系统设置</h2>
+
+<!-- ========== LLM 配置 ========== -->
+<div class="panel" id="panel-llm">
+  <h3>🤖 LLM 配置</h3>
+  <p class="muted small" style="margin-bottom:12px">
+    用于自然语言选股。支持 OpenAI / DeepSeek / 通义千问 / Ollama 等兼容接口。
+  </p>
+  <div class="form-grid">
+    <label class="form-label">API Key
+      <input type="password" id="llm-api-key" class="form-input" placeholder="sk-..." autocomplete="off">
+    </label>
+    <label class="form-label">Base URL
+      <input type="text" id="llm-base-url" class="form-input" placeholder="https://api.openai.com/v1">
+    </label>
+    <label class="form-label">Model
+      <input type="text" id="llm-model" class="form-input" placeholder="gpt-4o-mini">
+    </label>
+    <label class="form-label">Timeout (秒)
+      <input type="number" id="llm-timeout" class="form-input" value="60" min="5" max="300">
+    </label>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-outline" onclick="testLLM()">测试连接</button>
+    <button class="btn btn-primary" onclick="saveLLM()">保存</button>
+    <span id="llm-msg" class="form-msg"></span>
+  </div>
+</div>
+
+<!-- ========== 邮件通知 ========== -->
+<div class="panel" id="panel-notify">
+  <h3>📧 邮件通知</h3>
+  <p class="muted small" style="margin-bottom:12px">
+    回测完成、交易执行等事件触发邮件通知。配置后可发送测试邮件验证。
+  </p>
+  <div class="form-row-inline" style="margin-bottom:12px">
+    <label class="toggle-label">
+      <input type="checkbox" id="notify-enabled">
+      <span>启用邮件通知</span>
+    </label>
+  </div>
+  <div class="form-grid">
+    <label class="form-label">SMTP 服务器
+      <input type="text" id="smtp-host" class="form-input" placeholder="smtp.qq.com">
+    </label>
+    <label class="form-label">端口
+      <input type="number" id="smtp-port" class="form-input" value="465" min="1" max="65535">
+    </label>
+    <label class="form-label">用户名
+      <input type="text" id="smtp-user" class="form-input" placeholder="your@qq.com">
+    </label>
+    <label class="form-label">授权码 / 密码
+      <input type="password" id="smtp-password" class="form-input" placeholder="smtp授权码" autocomplete="off">
+    </label>
+    <label class="form-label">发件人地址
+      <input type="text" id="smtp-from" class="form-input" placeholder="your@qq.com">
+    </label>
+    <label class="form-label">收件人（逗号分隔）
+      <input type="text" id="smtp-to" class="form-input" placeholder="a@b.com, c@d.com">
+    </label>
+  </div>
+  <div class="form-row-inline" style="margin-bottom:12px">
+    <label class="toggle-label">
+      <input type="checkbox" id="smtp-ssl" checked>
+      <span>使用 SSL</span>
+    </label>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-outline" onclick="testSMTP()">发送测试邮件</button>
+    <button class="btn btn-primary" onclick="saveNotify()">保存</button>
+    <span id="notify-msg" class="form-msg"></span>
+  </div>
+</div>
+
+<!-- ========== 数据源 ========== -->
+<div class="panel" id="panel-datasource">
+  <h3>📊 数据源</h3>
+  <p class="muted small" style="margin-bottom:12px">
+    管理行情数据源。优先级：高优先级先使用，失败自动降级。
+  </p>
+  <div id="sources-list"></div>
+  <div class="form-actions">
+    <button class="btn btn-primary" onclick="saveDataSources()">保存</button>
+    <span id="datasource-msg" class="form-msg"></span>
+  </div>
+</div>
+
+<!-- ========== 调度器 ========== -->
+<div class="panel" id="panel-scheduler">
+  <h3>⏰ 调度器</h3>
+  <p class="muted small" style="margin-bottom:12px">
+    控制自动数据拉取和定时任务。
+  </p>
+  <div class="form-row-inline" style="margin-bottom:12px">
+    <label class="toggle-label">
+      <input type="checkbox" id="scheduler-enabled">
+      <span>启用调度器</span>
+    </label>
+  </div>
+  <div class="form-grid">
+    <label class="form-label">实时轮询周期（秒）
+      <input type="number" id="poll-seconds" class="form-input" value="3" min="1" max="60">
+    </label>
+    <label class="form-label">每日全量检查时间
+      <input type="text" id="daily-check-time" class="form-input" value="16:00" placeholder="HH:MM">
+    </label>
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" onclick="saveScheduler()">保存</button>
+    <span id="scheduler-msg" class="form-msg"></span>
+  </div>
+</div>
+
+<script>
+// ============================
+// 初始化：从服务端加载配置
+// ============================
+const $ = id => document.getElementById(id);
+const msg = (id, text, ok) => {
+  const el = $(id);
+  el.textContent = text;
+  el.className = 'form-msg ' + (ok ? 'msg-ok' : 'msg-err');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.textContent = ''; el.className = 'form-msg'; }, 5000);
+};
+
+fetch('/settings/api/get').then(r => r.json()).then(cfg => {
+  // LLM
+  $('llm-api-key').value = cfg.llm?.api_key || '';
+  $('llm-base-url').value = cfg.llm?.base_url || '';
+  $('llm-model').value = cfg.llm?.model || '';
+  $('llm-timeout').value = cfg.llm?.timeout || 60;
+
+  // Notify
+  $('notify-enabled').checked = !!cfg.notify?.enabled;
+  $('smtp-host').value = cfg.notify?.smtp_host || '';
+  $('smtp-port').value = cfg.notify?.smtp_port || 465;
+  $('smtp-user').value = cfg.notify?.smtp_user || '';
+  $('smtp-password').value = cfg.notify?.smtp_password || '';
+  $('smtp-from').value = cfg.notify?.from_addr || '';
+  $('smtp-to').value = cfg.notify?.to_addrs || '';
+  $('smtp-ssl').checked = cfg.notify?.smtp_ssl !== false;
+
+  // Data sources
+  renderSources(cfg.data_sources || {});
+
+  // Scheduler
+  $('scheduler-enabled').checked = !!cfg.scheduler?.enabled;
+  $('poll-seconds').value = cfg.scheduler?.jobs?.realtime_poll?.seconds || 3;
+  $('daily-check-time').value =
+    (cfg.scheduler?.jobs?.daily_full_check?.hour || 16) + ':' +
+    String(cfg.scheduler?.jobs?.daily_full_check?.minute || 0).padStart(2, '0');
+});
+
+// ============================
+// LLM
+// ============================
+function saveLLM() {
+  const payload = {
+    llm: {
+      api_key: $('llm-api-key').value,
+      base_url: $('llm-base-url').value,
+      model: $('llm-model').value,
+      timeout: parseInt($('llm-timeout').value) || 60,
+    }
+  };
+  fetch('/settings/api/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(r => r.json()).then(d => msg('llm-msg', d.message, d.ok));
+}
+
+function testLLM() {
+  msg('llm-msg', '测试中...', true);
+  fetch('/settings/api/test-llm', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      api_key: $('llm-api-key').value,
+      base_url: $('llm-base-url').value,
+      model: $('llm-model').value,
+      timeout: parseInt($('llm-timeout').value) || 30,
+    })
+  })
+  .then(r => r.json()).then(d => msg('llm-msg', d.message, d.ok));
+}
+
+// ============================
+// Notify
+// ============================
+function saveNotify() {
+  const payload = {
+    notify: {
+      enabled: $('notify-enabled').checked,
+      smtp_host: $('smtp-host').value,
+      smtp_port: parseInt($('smtp-port').value) || 465,
+      smtp_user: $('smtp-user').value,
+      smtp_password: $('smtp-password').value,
+      smtp_ssl: $('smtp-ssl').checked,
+      from_addr: $('smtp-from').value,
+      to_addrs: $('smtp-to').value,
+    }
+  };
+  fetch('/settings/api/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(r => r.json()).then(d => msg('notify-msg', d.message, d.ok));
+}
+
+function testSMTP() {
+  msg('notify-msg', '发送中...', true);
+  fetch('/settings/api/test-smtp', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      smtp_host: $('smtp-host').value,
+      smtp_port: parseInt($('smtp-port').value) || 465,
+      smtp_user: $('smtp-user').value,
+      smtp_password: $('smtp-password').value,
+      smtp_ssl: $('smtp-ssl').checked,
+      from_addr: $('smtp-from').value,
+      to_addrs: $('smtp-to').value,
+    })
+  })
+  .then(r => r.json()).then(d => msg('notify-msg', d.message, d.ok));
+}
+
+// ============================
+// Data Sources
+// ============================
+const SOURCE_NAMES = { akshare: 'AkShare', tushare: 'Tushare Pro', eastmoney: '东方财富' };
+
+function renderSources(sources) {
+  const el = $('sources-list');
+  el.innerHTML = '';
+  for (const [key, val] of Object.entries(sources)) {
+    const div = document.createElement('div');
+    div.className = 'source-row';
+    div.innerHTML = `
+      <label class="toggle-label">
+        <input type="checkbox" data-source="${key}" ${val.enabled ? 'checked' : ''}>
+        <span>${SOURCE_NAMES[key] || key}</span>
+      </label>
+      <input type="text" class="form-input source-token" data-source="${key}"
+        placeholder="Token（如 Tushare Pro Token）" value="${val.token || ''}"
+        style="max-width:320px;margin-left:12px">
+      <input type="number" class="form-input source-timeout" data-source="${key}"
+        placeholder="超时秒" value="${val.timeout || 15}" style="max-width:80px;margin-left:8px">
+    `;
+    el.appendChild(div);
+  }
+}
+
+function saveDataSources() {
+  const sources = {};
+  document.querySelectorAll('[data-source]').forEach(input => {
+    const src = input.dataset.source;
+    if (!sources[src]) sources[src] = {};
+    if (input.type === 'checkbox') sources[src].enabled = input.checked;
+    else if (input.classList.contains('source-token')) sources[src].token = input.value;
+    else if (input.classList.contains('source-timeout')) sources[src].timeout = parseInt(input.value) || 15;
+  });
+  fetch('/settings/api/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ data_sources: sources }) })
+    .then(r => r.json()).then(d => msg('datasource-msg', d.message, d.ok));
+}
+
+// ============================
+// Scheduler
+// ============================
+function saveScheduler() {
+  const parts = ($('daily-check-time').value || '16:00').split(':');
+  const payload = {
+    scheduler: {
+      enabled: $('scheduler-enabled').checked,
+      jobs: {
+        realtime_poll: { trigger: 'interval', seconds: parseInt($('poll-seconds').value) || 3, only_trading_day: true },
+        daily_full_check: { trigger: 'cron', hour: parseInt(parts[0]) || 16, minute: parseInt(parts[1]) || 0, only_trading_day: true },
+      }
+    }
+  };
+  fetch('/settings/api/save', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(r => r.json()).then(d => msg('scheduler-msg', d.message, d.ok));
+}
+</script>
+{% endblock %}

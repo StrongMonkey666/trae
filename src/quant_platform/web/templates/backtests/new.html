@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}新建回测{% endblock %}
+{% block content %}
+<h2>新建回测</h2>
+
+<!-- ========== 基础参数 ========== -->
+<div class="panel">
+  <h3>基础参数</h3>
+  <div class="form-grid">
+    <label class="form-label">策略名称
+      <input type="text" id="bt-name" class="form-input" placeholder="my_strategy">
+    </label>
+    <label class="form-label">起始日期
+      <input type="date" id="bt-start" class="form-input" value="{{ today[:4] }}-01-01">
+    </label>
+    <label class="form-label">结束日期
+      <input type="date" id="bt-end" class="form-input" value="{{ today }}">
+    </label>
+    <label class="form-label">初始资金（元）
+      <input type="number" id="bt-capital" class="form-input" value="1000000" min="10000" step="10000">
+    </label>
+    <label class="form-label">调仓频率
+      <select id="bt-freq" class="form-input">
+        <option value="daily">每日</option>
+        <option value="weekly" selected>每周</option>
+        <option value="monthly">每月</option>
+      </select>
+    </label>
+    <label class="form-label">股票池（留空=全市场）
+      <input type="text" id="bt-universe" class="form-input" placeholder="600519,000858（逗号分隔）">
+    </label>
+  </div>
+</div>
+
+<!-- ========== 选股策略 ========== -->
+<div class="panel">
+  <h3>选股策略</h3>
+  <p class="muted small" style="margin-bottom:12px">选择预置模板，或手动输入 JSON 条件（二选一）。</p>
+  <div class="template-grid" style="margin-bottom:16px">
+    {% for t in templates %}
+    <div class="template-card" data-key="{{ t.key }}" onclick="selectTemplate('{{ t.key }}')">
+      <div class="t-name">{{ t.name }}</div>
+      <div class="t-desc">{{ t.description }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="selected-template muted" id="selected-tpl">未选择模板</div>
+  <div style="margin-top:12px">
+    <textarea id="bt-json-spec" class="form-textarea" rows="6"
+      placeholder='手动输入 JSON（可选，优先级低于模板）：&#10;{&#10;  "conditions": [{"field":"pe_ttm","operator":"<","value":20}],&#10;  "logic": "AND"&#10;}'
+    ></textarea>
+  </div>
+</div>
+
+<!-- ========== 交易参数 ========== -->
+<div class="panel">
+  <h3>交易参数</h3>
+  <div class="form-grid">
+    <label class="form-label">最大持仓数
+      <input type="number" id="bt-max-holdings" class="form-input" value="5" min="1" max="50">
+    </label>
+    <label class="form-label">每日最多买入
+      <input type="number" id="bt-max-buy" class="form-input" value="2" min="1" max="20">
+    </label>
+    <label class="form-label">每日最多卖出
+      <input type="number" id="bt-max-sell" class="form-input" value="3" min="1" max="20">
+    </label>
+    <label class="form-label">最大持有天数
+      <input type="number" id="bt-max-days" class="form-input" value="30" min="1" max="365">
+    </label>
+    <label class="form-label">止盈阈值
+      <input type="number" id="bt-take-profit" class="form-input" value="0.20" step="0.01" min="0">
+      <span class="muted small">（如 0.20 = 20%）</span>
+    </label>
+    <label class="form-label">止盈回落
+      <input type="number" id="bt-take-profit-dd" class="form-input" value="0.05" step="0.01" min="0">
+      <span class="muted small">（从高点回落多少触发卖出）</span>
+    </label>
+    <label class="form-label">止损阈值
+      <input type="number" id="bt-stop-loss" class="form-input" value="-0.08" step="0.01" max="0">
+      <span class="muted small">（如 -0.08 = -8%）</span>
+    </label>
+    <label class="form-label">资金分配模型
+      <select id="bt-capital-model" class="form-input">
+        <option value="equal_weight">等权</option>
+        <option value="fixed_amount">固定金额</option>
+        <option value="kelly">Kelly 公式</option>
+      </select>
+    </label>
+    <label class="form-label">固定金额（仅 fixed_amount）
+      <input type="number" id="bt-fixed-amount" class="form-input" value="10000" min="1000" step="1000">
+    </label>
+  </div>
+
+  <details style="margin-top:16px">
+    <summary class="muted" style="cursor:pointer">费率设置（高级）</summary>
+    <div class="form-grid" style="margin-top:8px">
+      <label class="form-label">佣金率
+        <input type="number" id="bt-fee" class="form-input" value="0.0003" step="0.0001">
+      </label>
+      <label class="form-label">印花税率
+        <input type="number" id="bt-stamp" class="form-input" value="0.001" step="0.0001">
+      </label>
+      <label class="form-label">滑点
+        <input type="number" id="bt-slippage" class="form-input" value="0.001" step="0.0001">
+      </label>
+    </div>
+  </details>
+</div>
+
+<!-- ========== 执行 ========== -->
+<div class="panel" style="border-color: var(--primary);">
+  <div class="form-actions" style="margin:0">
+    <button class="btn btn-primary btn-lg" id="btn-run" onclick="runBacktest()">🚀 启动回测</button>
+    <span id="bt-msg" class="form-msg"></span>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let selectedTemplate = null;
+
+function selectTemplate(key) {
+  selectedTemplate = key;
+  // 高亮选中的卡片
+  document.querySelectorAll('.template-card').forEach(el => {
+    el.style.borderColor = el.dataset.key === key ? 'var(--primary)' : '';
+    el.style.background = el.dataset.key === key ? '#1e40af' : '';
+  });
+  $('selected-tpl').innerHTML = '已选择：<strong>' + key + '</strong>';
+}
+
+function runBacktest() {
+  const name = $('bt-name').value || ('web_' + new Date().toISOString().slice(0,10));
+  const start = $('bt-start').value;
+  const end = $('bt-end').value;
+
+  if (!start || !end) {
+    alert('请填写起止日期'); return;
+  }
+
+  let json_spec = null;
+  const jsonText = $('bt-json-spec').value.trim();
+  if (jsonText) {
+    try { json_spec = JSON.parse(jsonText); }
+    catch(e) { alert('JSON 格式错误: ' + e.message); return; }
+  }
+
+  const btn = $('btn-run');
+  btn.disabled = true;
+  btn.textContent = '回测执行中，请稍候...';
+  msg('bt-msg', '', true);
+
+  const payload = {
+    name,
+    start_date: start,
+    end_date: end,
+    initial_capital: parseFloat($('bt-capital').value) || 1000000,
+    rebalance_freq: $('bt-freq').value,
+    universe: $('bt-universe').value,
+    max_holdings: parseInt($('bt-max-holdings').value) || 5,
+    max_buy_per_day: parseInt($('bt-max-buy').value) || 2,
+    max_sell_per_day: parseInt($('bt-max-sell').value) || 3,
+    take_profit_threshold: parseFloat($('bt-take-profit').value) || 0.20,
+    take_profit_drawdown: parseFloat($('bt-take-profit-dd').value) || 0.05,
+    stop_loss: parseFloat($('bt-stop-loss').value) || -0.08,
+    max_holding_days: parseInt($('bt-max-days').value) || 30,
+    capital_model: $('bt-capital-model').value,
+    fixed_amount: parseFloat($('bt-fixed-amount').value) || 10000,
+    fee_rate: parseFloat($('bt-fee').value) || 0.0003,
+    stamp_tax: parseFloat($('bt-stamp').value) || 0.001,
+    slippage: parseFloat($('bt-slippage').value) || 0.001,
+  };
+
+  if (selectedTemplate) payload.template = selectedTemplate;
+  if (json_spec) payload.json_spec = json_spec;
+
+  fetch('/backtests/api/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  .then(r => r.json())
+  .then(d => {
+    btn.disabled = false;
+    btn.textContent = '🚀 启动回测';
+    if (d.ok) {
+      const m = d.metrics || {};
+      const summary = `回测 #${d.record_id} 完成 · 收益 ${((m.total_return||0)*100).toFixed(2)}% · 夏普 ${(m.sharpe_ratio||0).toFixed(2)} · 交易 ${d.trade_count} 笔`;
+      $('bt-msg').innerHTML = '<span class="msg-ok">' + summary + '</span> <a href="/backtests/' + d.record_id + '" class="btn btn-outline" style="margin-left:8px">查看详情</a>';
+    } else {
+      $('bt-msg').innerHTML = '<span class="msg-err">' + (d.error || '未知错误') + '</span>';
+    }
+  })
+  .catch(e => {
+    btn.disabled = false;
+    btn.textContent = '🚀 启动回测';
+    $('bt-msg').innerHTML = '<span class="msg-err">请求失败: ' + e.message + '</span>';
+  });
+}
+</script>
+{% endblock %}
