@@ -1,45 +1,32 @@
 project:
   name: quant_platform
-  version: "2.0"
+  version: '2.0'
   description: 股票量化回测系统
-
 data_service:
-  # 统一数据服务层
   storage:
     sqlite_path: data/sqlite/quant.db
     hdf5_path: data/hdf5/market.h5
-  # 缓存与历史数据默认范围
   cache:
-    history_years: 10          # 初次拉取覆盖的年数
-    incremental_realtime_seconds: 3   # 实时轮询周期
-
-  # 默认数据源优先级（高优先级优先；失败自动降级）
+    history_years: 10
+    incremental_realtime_seconds: 3
   source_priority:
-    - akshare
-    - tushare
-    - eastmoney
-  # 实时数据源（拉取最新行情/盘口）
+  - akshare
+  - tushare
+  - eastmoney
   realtime_source: akshare
-
-# 数据源配置
 data_sources:
   akshare:
     enabled: true
     timeout: 15
   tushare:
-    enabled: false             # 需要 token 时改为 true
-    token: ""                  # 在这里填入 Tushare Pro Token
+    enabled: false
+    token: ''
     timeout: 15
   eastmoney:
     enabled: true
     timeout: 15
-
-# 交易日历（用于跳过节假日）
 trading_calendar:
-  # 预留配置：未来可对接第三方节假日 API
-  holidays_api: ""
-
-# 调度器
+  holidays_api: ''
 scheduler:
   enabled: true
   jobs:
@@ -52,34 +39,20 @@ scheduler:
       hour: 16
       minute: 0
       only_trading_day: true
-
-# LLM 配置（自然语言选股 / 后续接入通义千问 / DeepSeek / Ollama）
 llm:
-  api_key: ""                       # 在这里填入 API Key
-  base_url: "https://api.openai.com/v1"
-  model: "gpt-4o-mini"
-  # DeepSeek 示例：
-  #   base_url: "https://api.deepseek.com/v1"
-  #   model: "deepseek-chat"
-  # 通义千问示例：
-  #   base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  #   model: "qwen-turbo"
-  # Ollama 本地示例：
-  #   base_url: "http://localhost:11434/v1"
-  #   model: "qwen2.5:7b"
-  timeout: 60
-
-# 邮件提醒
+  api_key: sk-12345678
+  base_url: https://api.openai.com/v1
+  model: persist-test
+  timeout: 30
 notify:
-  enabled: false                # 需要邮件时改为 true
-  smtp_host: ""                 # 例：smtp.qq.com / smtp.gmail.com
+  enabled: false
+  smtp_host: ''
   smtp_port: 465
-  smtp_user: ""
-  smtp_password: ""             # 授权码
+  smtp_user: ''
+  smtp_password: my-secret-pw
   smtp_ssl: true
-  from_addr: ""
-  to_addrs: ""                  # 多个用英文逗号分隔
-
+  from_addr: ''
+  to_addrs: ''
 logging:
   level: INFO
   file: logs/quant_platform.log
